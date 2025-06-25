@@ -15,7 +15,7 @@ const createPost = async (title, content, userId) => {
 };
 const getPosts = async () => {
   try {
-    const posts = await Post.find({title : 'My second Post'}).populate("user" , "name");
+    const posts = await Post.find()
     console.log("Posts retrieved successfully:", posts);
     return posts;
   } catch (error) {

@@ -1,21 +1,16 @@
 const connectDb = require("./config/db");
+const express = require("express");
+const usersRoutes = require("./routes/usersRoutes");
+require("dotenv").config();
+const app = express();
 // const createUser = require("./controllers/userController");
 const postController = require("./controllers/postController");
 const commentController = require("./controllers/commentController");
+const categoriesController = require("./controllers/categoryController");
 connectDb();
 
-// createUser("said", "said@gmail.com");
-// createUser("himda", "himda@gmail.com");
-
-// postController.createPost(
-//   "My second Post",
-//   "This is the content of my first post",
-//   "685abd1847145e2b67460b66"
-// );
-// postController.getPosts()
-
-commentController(
-  "This is a comment on the first post",
-  "685ac1ea2288f6c6adb15674",
-  "685abd1847145e2b67460b65"
-);
+app.use(express.json());
+app.use("/users", usersRoutes);
+app.listen(process.env.PORT, () => {
+  console.log(`Server is running on port ${process.env.PORT}`);
+});
