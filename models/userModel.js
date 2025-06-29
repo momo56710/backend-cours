@@ -19,6 +19,10 @@ const userSchema = new schema(
         message: (props) => `${props.value} is not a valid email!`,
       },
     },
+    password: {
+      type: String,
+      required: true,
+    },
     role: {
       type: String,
       enum: ["admin", "user", "moderator"],

@@ -1,54 +1,71 @@
 const User = require("../models/userModel");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
-// Get all users with search and pagination
-const getAllUsers = async (req, res) => {
+// login user
+const loginUser = async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      role = '', 
-      isActive = '',
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
-
-    // Build search query
-    const query = {};
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
-    if (role) query.role = role;
-    if (isActive !== '') query.isActive = isActive === 'true';
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
 
-    // Get users with pagination
-    const users = await User.find(query)
-      .select('name email role isActive isVerified createdAt')
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    // Get total count for pagination
-    const totalUsers = await User.countDocuments(query);
-    const totalPages = Math.ceil(totalUsers / parseInt(limit));
+    const token = jwt.sign(
+      { userId: user._id, role: user.role, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.status(200).json({
       success: true,
+      message: "User logged in successfully",
+      data: {
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error logging in user:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// Get all users
+const getAllUsers = async (req, res) => {
+  try {
+    console.log(req.user);
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin access required",
+      });
+    }
+
+    const users = await User.find().select("-password");
+    res.status(200).json({
+      success: true,
       data: users,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages,
-        totalUsers,
-        hasNextPage: parseInt(page) < totalPages,
-        hasPrevPage: parseInt(page) > 1
-      }
     });
   } catch (error) {
     console.error("Error retrieving users:", error.message);
@@ -58,35 +75,50 @@ const getAllUsers = async (req, res) => {
 
 // Create new user
 const createUser = async (req, res) => {
-  const { name, email, role } = req.body;
-  
-  if (!name || !email) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Name and email are required" 
+  const { name, email, password, role } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Name, email and password are required",
     });
   }
-  
+
   try {
-    const user = new User(req.body);
+    console.log("Creating user:", { password });
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("Hashed password:", hashedPassword);
+    const userData = {
+      name,
+      email,
+      password: hashedPassword,
+      role: role || "user",
+    };
+
+    const user = new User(userData);
     await user.save();
-    res.status(201).json({ 
-      success: true, 
-      message: "User created successfully", 
-      data: user 
+
+    // Don't send password in response
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: userResponse,
     });
   } catch (error) {
     console.error("Error creating user:", error.message);
     if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Email already exists" 
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists",
       });
     }
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
@@ -94,26 +126,32 @@ const createUser = async (req, res) => {
 // Get user by ID
 const getUserById = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+    // Check if user is admin or accessing their own profile
+    if (req.user.role !== "admin" && req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
       });
     }
-    res.status(200).json({ 
-      success: true, 
-      message: "User found", 
-      data: user 
+
+    const user = await User.findById(id).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: user,
     });
   } catch (error) {
     console.error("Error retrieving user:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
@@ -121,38 +159,51 @@ const getUserById = async (req, res) => {
 // Update user
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
-    const user = await User.findByIdAndUpdate(
-      id, 
-      req.body, 
-      { new: true, runValidators: true }
-    );
-    
-    if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+    // Check if user is admin or updating their own profile
+    if (req.user.role !== "admin" && req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
       });
     }
-    
-    res.status(200).json({ 
-      success: true, 
-      message: "User updated successfully", 
-      data: user 
+
+    const updateData = { ...req.body };
+
+    // Hash password if it's being updated
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+
+    const user = await User.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: user,
     });
   } catch (error) {
     console.error("Error updating user:", error.message);
     if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Email already exists" 
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists",
       });
     }
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
@@ -160,33 +211,41 @@ const updateUser = async (req, res) => {
 // Delete user
 const deleteUser = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
-    const user = await User.findByIdAndDelete(id);
-    if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+    // Check if user is admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Admin access required",
       });
     }
-    res.status(200).json({ 
-      success: true, 
-      message: "User deleted successfully" 
+
+    const user = await User.findByIdAndDelete(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting user:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 };
 
-module.exports = { 
-  getAllUsers, 
-  createUser, 
-  getUserById, 
-  updateUser, 
-  deleteUser 
+module.exports = {
+  loginUser,
+  getAllUsers,
+  createUser,
+  getUserById,
+  updateUser,
+  deleteUser,
 };
