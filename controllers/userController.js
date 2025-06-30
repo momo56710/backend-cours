@@ -240,6 +240,22 @@ const deleteUser = async (req, res) => {
     });
   }
 };
+const getCurrentUser = async (req, res) => {
+  try {
+    const user = req.user;
+    const userData = await User.findById(user.userId).select("-password");
+    res.status(200).json({
+      success: true,
+      data: userData,
+    });
+  } catch (error) {
+    console.error("Error getting current user:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
 
 module.exports = {
   loginUser,
@@ -248,4 +264,5 @@ module.exports = {
   getUserById,
   updateUser,
   deleteUser,
+  getCurrentUser,
 };

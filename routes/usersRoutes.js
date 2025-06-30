@@ -14,9 +14,11 @@ router.get("/", authMiddleware, userController.getAllUsers);
 // POST /users - Create new user
 router.post("/", userController.createUser);
 
+// GET /users/me - Get current user
+router.get("/me", authMiddleware, userController.getCurrentUser);
+
 // GET /users/:id - Get user by ID
 router.get("/:id", authMiddleware, userController.getUserById);
-
 // PUT /users/:id - Update user
 router.put("/:id", authMiddleware, userController.updateUser);
 
