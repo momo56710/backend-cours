@@ -4,32 +4,31 @@ const User = require("../models/userModel");
 // Get all posts with search and pagination
 const getAllPosts = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      userId = '',
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
     const query = {};
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
+        { title: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
       ];
     }
-    if (userId) query.user = userId;
+    if (req.user.userId) query.user = req.user.userId;
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    const sortOptions = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
     // Get posts with pagination and populate user
     const posts = await Post.find(query)
-      .populate('user', 'name email')
+      .populate("user", "name email")
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
@@ -46,57 +45,55 @@ const getAllPosts = async (req, res) => {
         totalPages,
         totalPosts,
         hasNextPage: parseInt(page) < totalPages,
-        hasPrevPage: parseInt(page) > 1
-      }
+        hasPrevPage: parseInt(page) > 1,
+      },
     });
   } catch (error) {
     console.error("Error retrieving posts:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
 
 // Create new post
 const createPost = async (req, res) => {
-  const { title, content, user: userId } = req.body;
-  
-  if (!title || !content || !userId) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Title, content, and user ID are required" 
+  const { title, content } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: "Title and content are required",
     });
   }
-  
+
   try {
-    // Check if user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
-      });
+    const postData = { title, content, user: '685abbb9aa899cb748b318c7' };
+    
+    // Add image paths if files were uploaded
+    if (req.files && req.files.length > 0) {
+      postData.images = req.files.map(file => file.path);
     }
-    
-    const post = new Post({ title, content, user: userId });
+
+    const post = new Post(postData);
     await post.save();
-    
+
     // Populate user details in response
-    await post.populate('user', 'name email');
-    
-    res.status(201).json({ 
-      success: true, 
-      message: "Post created successfully", 
-      data: post 
+    await post.populate("user", "name email");
+
+    res.status(201).json({
+      success: true,
+      message: "Post created successfully",
+      data: post,
     });
   } catch (error) {
     console.error("Error creating post:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -104,26 +101,32 @@ const createPost = async (req, res) => {
 // Get post by ID
 const getPostById = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
-    const post = await Post.findById(id).populate('user', 'name email');
+    const post = await Post.findById(id).populate("user", "name email");
     if (!post) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Post not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
       });
     }
-    res.status(200).json({ 
-      success: true, 
-      message: "Post found", 
-      data: post 
+    if (post.user._id.toString() !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to access this post",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Post found",
+      data: post,
     });
   } catch (error) {
     console.error("Error retrieving post:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -131,32 +134,38 @@ const getPostById = async (req, res) => {
 // Update post
 const updatePost = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
-    const post = await Post.findByIdAndUpdate(
-      id, 
-      req.body, 
-      { new: true, runValidators: true }
-    ).populate('user', 'name email');
+    const updateData = { ...req.body };
     
+    // Add image paths if files were uploaded
+    if (req.files && req.files.length > 0) {
+      updateData.images = req.files.map(file => file.path);
+    }
+
+    const post = await Post.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate("user", "name email");
+
     if (!post) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Post not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
       });
     }
-    
-    res.status(200).json({ 
-      success: true, 
-      message: "Post updated successfully", 
-      data: post 
+
+    res.status(200).json({
+      success: true,
+      message: "Post updated successfully",
+      data: post,
     });
   } catch (error) {
     console.error("Error updating post:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -164,33 +173,33 @@ const updatePost = async (req, res) => {
 // Delete post
 const deletePost = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const post = await Post.findByIdAndDelete(id);
     if (!post) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Post not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Post not found",
       });
     }
-    res.status(200).json({ 
-      success: true, 
-      message: "Post deleted successfully" 
+    res.status(200).json({
+      success: true,
+      message: "Post deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting post:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
 
-module.exports = { 
-  getAllPosts, 
-  createPost, 
-  getPostById, 
-  updatePost, 
-  deletePost 
+module.exports = {
+  getAllPosts,
+  createPost,
+  getPostById,
+  updatePost,
+  deletePost,
 };

@@ -25,7 +25,8 @@ app.get("/", (req, res) => {
       users: "/users",
       posts: "/posts", 
       comments: "/comments",
-      categories: "/categories"
+      categories: "/categories",
+
     }
   });
 });

@@ -21,6 +21,10 @@ const postSchema = new schema(
       ref: "User",
       required: true,
     },
+    images: [{
+      type: String,
+      default: [],
+    }],
   },
   {
     timestamps: true,

@@ -96,6 +96,11 @@ const createUser = async (req, res) => {
       role: role || "user",
     };
 
+    // Add avatar path if file was uploaded
+    if (req.file) {
+      userData.avatar = req.file.path;
+    }
+
     const user = new User(userData);
     await user.save();
 
@@ -174,6 +179,11 @@ const updateUser = async (req, res) => {
     // Hash password if it's being updated
     if (updateData.password) {
       updateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+
+    // Add avatar path if file was uploaded
+    if (req.file) {
+      updateData.avatar = req.file.path;
     }
 
     const user = await User.findByIdAndUpdate(id, updateData, {

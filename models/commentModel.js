@@ -19,6 +19,10 @@ const commentSchema = new schema(
       ref: "post",
       required: true,
     },
+    attachments: [{
+      type: String,
+      default: [],
+    }],
   },
   {
     timestamps: true,

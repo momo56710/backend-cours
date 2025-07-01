@@ -90,7 +90,14 @@ const createComment = async (req, res) => {
       });
     }
     
-    const comment = new Comment({ content, post: postId, user: userId });
+    const commentData = { content, post: postId, user: userId };
+    
+    // Add attachment paths if files were uploaded
+    if (req.files && req.files.length > 0) {
+      commentData.attachments = req.files.map(file => file.path);
+    }
+    
+    const comment = new Comment(commentData);
     await comment.save();
     
     // Populate user and post details in response
@@ -149,9 +156,16 @@ const updateComment = async (req, res) => {
   const { id } = req.params;
   
   try {
+    const updateData = { ...req.body };
+    
+    // Add attachment paths if files were uploaded
+    if (req.files && req.files.length > 0) {
+      updateData.attachments = req.files.map(file => file.path);
+    }
+    
     const comment = await Comment.findByIdAndUpdate(
       id, 
-      req.body, 
+      updateData, 
       { new: true, runValidators: true }
     ).populate([
       { path: 'user', select: 'name email' },
