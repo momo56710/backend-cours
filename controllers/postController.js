@@ -1,6 +1,6 @@
 const Post = require("../models/postModel");
 const User = require("../models/userModel");
-
+const WebSocketController = require("./websocketController");
 // Get all posts with search and pagination
 const getAllPosts = async (req, res) => {
   try {
@@ -68,13 +68,13 @@ const createPost = async (req, res) => {
       message: "Title and content are required",
     });
   }
-
+  WebSocketController.sendToAll("new post created");
   try {
-    const postData = { title, content, user: '685abbb9aa899cb748b318c7' };
-    
+    const postData = { title, content, user: "685abbb9aa899cb748b318c7" };
+
     // Add image paths if files were uploaded
     if (req.files && req.files.length > 0) {
-      postData.images = req.files.map(file => file.path);
+      postData.images = req.files.map((file) => file.path);
     }
 
     const post = new Post(postData);
@@ -137,10 +137,10 @@ const updatePost = async (req, res) => {
 
   try {
     const updateData = { ...req.body };
-    
+
     // Add image paths if files were uploaded
     if (req.files && req.files.length > 0) {
-      updateData.images = req.files.map(file => file.path);
+      updateData.images = req.files.map((file) => file.path);
     }
 
     const post = await Post.findByIdAndUpdate(id, updateData, {

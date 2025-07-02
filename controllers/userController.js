@@ -23,7 +23,7 @@ const loginUser = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id, role: user.role, email: user.email },
+      { userId: user._id, role: user.role, email: user.email, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -36,6 +36,7 @@ const loginUser = async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
+          username: user.username,
           email: user.email,
           role: user.role,
         },
@@ -75,12 +76,12 @@ const getAllUsers = async (req, res) => {
 
 // Create new user
 const createUser = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, username, email, password, role } = req.body;
 
-  if (!name || !email || !password) {
+  if (!name || !username || !email || !password) {
     return res.status(400).json({
       success: false,
-      message: "Name, email and password are required",
+      message: "Name, username, email and password are required",
     });
   }
 
@@ -91,6 +92,7 @@ const createUser = async (req, res) => {
     console.log("Hashed password:", hashedPassword);
     const userData = {
       name,
+      username,
       email,
       password: hashedPassword,
       role: role || "user",
@@ -116,9 +118,11 @@ const createUser = async (req, res) => {
   } catch (error) {
     console.error("Error creating user:", error.message);
     if (error.code === 11000) {
+      // Check which field is duplicated
+      let field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
         success: false,
-        message: "Email already exists",
+        message: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`,
       });
     }
     res.status(500).json({
